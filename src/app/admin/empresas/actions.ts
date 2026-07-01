@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/utils/supabase/server'
+import { createClient, createAdminClient } from '@/utils/supabase/server'
 
 // Função auxiliar para validar se o usuário atual é super_admin no nível da aplicação
 async function checkSuperAdmin() {
@@ -28,7 +28,7 @@ export interface CreateCompanyState {
   error: string | null
 }
 
-// Criação de uma nova empresa
+// Criação de uma nova empresa e seu respectivo usuário admin (Transacional)
 export async function createCompany(prevState: CreateCompanyState, formData: FormData): Promise<CreateCompanyState> {
   try {
     const { supabase } = await checkSuperAdmin()
@@ -37,9 +37,15 @@ export async function createCompany(prevState: CreateCompanyState, formData: For
     const plano = formData.get('plano') as string
     const valor_mensalidade_raw = formData.get('valor_mensalidade')
     const status_pagamento = formData.get('status_pagamento') as string
+    const cnpj = formData.get('cnpj') as string
+    const telefone = formData.get('telefone') as string
 
-    if (!nome || !plano || !valor_mensalidade_raw) {
-      return { success: false, empresa: null, error: 'Os campos nome, plano e valor da mensalidade são obrigatórios.' }
+    const responsavel_nome = formData.get('responsavel_nome') as string
+    const responsavel_email = formData.get('responsavel_email') as string
+    const responsavel_senha = formData.get('responsavel_senha') as string
+
+    if (!nome || !plano || !valor_mensalidade_raw || !responsavel_nome || !responsavel_email || !responsavel_senha) {
+      return { success: false, empresa: null, error: 'Todos os campos obrigatórios (incluindo dados do responsável) devem ser preenchidos.' }
     }
 
     const valor_mensalidade = Number(valor_mensalidade_raw)
@@ -47,21 +53,60 @@ export async function createCompany(prevState: CreateCompanyState, formData: For
       return { success: false, empresa: null, error: 'O valor da mensalidade deve ser um número válido.' }
     }
 
-    // Grava no banco. O RLS permite pois a role na tabela usuarios é super_admin.
-    const { data, error } = await supabase
+    // 1. Grava a empresa no banco de dados
+    const { data: newCompany, error: dbError } = await supabase
       .from('empresas')
       .insert({
         nome,
         plano,
         valor_mensalidade,
-        status_pagamento: status_pagamento || 'ativo'
+        status_pagamento: status_pagamento || 'ativo',
+        cnpj,
+        telefone,
+        ativo: true
       })
       .select()
       .single()
 
-    if (error) {
-      console.error('Erro Supabase ao criar empresa:', error)
-      return { success: false, empresa: null, error: `Erro de banco de dados: ${error.message}` }
+    if (dbError) {
+      console.error('Erro Supabase ao criar empresa:', dbError)
+      return { success: false, empresa: null, error: `Erro ao criar empresa no banco: ${dbError.message}` }
+    }
+
+    // 2. Instancia o cliente administrativo para criar o usuário auth
+    const supabaseAdmin = createAdminClient()
+
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: responsavel_email,
+      password: responsavel_senha,
+      email_confirm: true // ativa a conta de imediato
+    })
+
+    if (authError) {
+      console.error('Erro ao criar usuário corporativo no Auth:', authError)
+      // Rollback: Deletar empresa criada
+      await supabaseAdmin.from('empresas').delete().eq('id', newCompany.id)
+      return { success: false, empresa: null, error: `Erro ao criar usuário Auth: ${authError.message}` }
+    }
+
+    const newUser = authData.user
+
+    // 3. Associa o usuário recém-criado com a empresa na tabela usuarios
+    const { error: profileError } = await supabaseAdmin
+      .from('usuarios')
+      .insert({
+        id: newUser!.id,
+        empresa_id: newCompany.id,
+        nome: responsavel_nome,
+        role: 'admin' // role administrativa para o locatário
+      })
+
+    if (profileError) {
+      console.error('Erro ao criar perfil de usuário administrativo:', profileError)
+      // Rollback completo: Deletar usuário auth e deletar a empresa
+      await supabaseAdmin.auth.admin.deleteUser(newUser!.id)
+      await supabaseAdmin.from('empresas').delete().eq('id', newCompany.id)
+      return { success: false, empresa: null, error: `Erro ao associar usuário com empresa: ${profileError.message}` }
     }
 
     // Revalidar rotas administrativas para atualizar as tabelas e dados na interface
@@ -70,7 +115,7 @@ export async function createCompany(prevState: CreateCompanyState, formData: For
     
     return { 
       success: true, 
-      empresa: data, 
+      empresa: newCompany, 
       error: null 
     }
   } catch (err: any) {
@@ -202,6 +247,8 @@ export async function updateCompany(prevState: CreateCompanyState, formData: For
     const valor_mensalidade_raw = formData.get('valor_mensalidade')
     const status_pagamento = formData.get('status_pagamento') as string
     const ativo_raw = formData.get('ativo')
+    const cnpj = formData.get('cnpj') as string
+    const telefone = formData.get('telefone') as string
 
     if (!id || !nome || !plano || !valor_mensalidade_raw) {
       return { success: false, empresa: null, error: 'Todos os campos obrigatórios devem ser preenchidos.' }
@@ -219,7 +266,9 @@ export async function updateCompany(prevState: CreateCompanyState, formData: For
         plano,
         valor_mensalidade,
         status_pagamento: status_pagamento || 'ativo',
-        ativo: ativo_raw === 'true'
+        ativo: ativo_raw === 'true',
+        cnpj,
+        telefone
       })
       .eq('id', id)
       .select()

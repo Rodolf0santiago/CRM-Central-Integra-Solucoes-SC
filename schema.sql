@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS public.empresas (
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS status_pagamento TEXT DEFAULT 'ativo';
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS valor_mensalidade NUMERIC DEFAULT 0.00;
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT true;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS cnpj TEXT;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS telefone TEXT;
 
 -- Tabela 2: usuarios (perfis vinculados aos usuários de auth.users e suas empresas)
 CREATE TABLE IF NOT EXISTS public.usuarios (

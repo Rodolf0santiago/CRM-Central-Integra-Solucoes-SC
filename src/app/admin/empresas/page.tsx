@@ -78,6 +78,13 @@ export default async function AdminCompaniesPage() {
                   <tr key={company.id} className="hover:bg-slate-900/30 transition">
                     <td className="px-6 py-4 space-y-1">
                       <div className="font-semibold text-white">{company.nome}</div>
+                      {(company.cnpj || company.telefone) && (
+                        <div className="text-xs text-slate-400">
+                          {company.cnpj && <span>CNPJ: {company.cnpj}</span>}
+                          {company.cnpj && company.telefone && <span className="mx-1.5">|</span>}
+                          {company.telefone && <span>Tel: {company.telefone}</span>}
+                        </div>
+                      )}
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs text-slate-550 font-mono select-all">
                           {company.id}

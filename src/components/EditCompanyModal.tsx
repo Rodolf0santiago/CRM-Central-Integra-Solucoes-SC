@@ -12,6 +12,8 @@ interface EditCompanyModalProps {
     valor_mensalidade: number
     status_pagamento: string
     ativo: boolean
+    cnpj?: string | null
+    telefone?: string | null
   }
 }
 
@@ -91,6 +93,38 @@ export default function EditCompanyModal({ company }: EditCompanyModalProps) {
                     defaultValue={company.nome}
                     className="mt-1.5 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-white focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-50"
                   />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="cnpj-edit" className="block text-sm font-medium text-slate-350">
+                      CNPJ
+                    </label>
+                    <input
+                      id="cnpj-edit"
+                      name="cnpj"
+                      type="text"
+                      disabled={isPending}
+                      defaultValue={company.cnpj || ''}
+                      placeholder="00.000.000/0000-00"
+                      className="mt-1.5 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-50"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="telefone-edit" className="block text-sm font-medium text-slate-350">
+                      Telefone
+                    </label>
+                    <input
+                      id="telefone-edit"
+                      name="telefone"
+                      type="text"
+                      disabled={isPending}
+                      defaultValue={company.telefone || ''}
+                      placeholder="(00) 00000-0000"
+                      className="mt-1.5 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-white placeholder-slate-550 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-50"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
