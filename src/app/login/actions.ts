@@ -14,7 +14,7 @@ export async function login(prevState: any, formData: FormData) {
     return { error: 'E-mail e senha são obrigatórios.' }
   }
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   })
@@ -28,6 +28,20 @@ export async function login(prevState: any, formData: FormData) {
       userFriendlyError = 'Por favor, confirme seu e-mail antes de acessar.'
     }
     return { error: userFriendlyError }
+  }
+
+  // Se o login for bem-sucedido, busca a role para fazer o direcionamento correto
+  if (data?.user) {
+    const { data: profile } = await supabase
+      .from('usuarios')
+      .select('role')
+      .eq('id', data.user.id)
+      .maybeSingle()
+
+    if (profile?.role === 'super_admin') {
+      revalidatePath('/admin', 'layout')
+      redirect('/admin')
+    }
   }
 
   revalidatePath('/dashboard', 'layout')
