@@ -34,16 +34,50 @@ export async function updateSession(request: NextRequest) {
 
   const url = request.nextUrl.clone()
 
-  // Regra 1: Proteção de Rotas. Se não estiver autenticado e tentar acessar /dashboard ou sub-rotas
-  if (url.pathname.startsWith('/dashboard') && !user) {
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
+  // Regra 1: Se não estiver autenticado, impede acesso ao /dashboard e /admin
+  if (!user) {
+    if (url.pathname.startsWith('/dashboard') || url.pathname.startsWith('/admin')) {
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
   }
 
-  // Regra 2: Se estiver autenticado e tentar acessar a página de login, redireciona para o dashboard
-  if (url.pathname === '/login' && user) {
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
+  // Regra 2: Usuário autenticado
+  if (user) {
+    // Obter perfil e status da empresa em uma única query otimizada
+    const { data: profile } = await supabase
+      .from('usuarios')
+      .select('role, empresas(ativo)')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const empresa = profile?.empresas as any
+
+    // Bloqueio automático de inquilinos desativados
+    if (profile?.role !== 'super_admin' && (!empresa || empresa.ativo === false)) {
+      await supabase.auth.signOut()
+      url.pathname = '/login'
+      url.searchParams.set('error', 'blocked')
+      return NextResponse.redirect(url)
+    }
+
+    // Redirecionamento da tela de login para a home correta com base na role
+    if (url.pathname === '/login') {
+      if (profile?.role === 'super_admin') {
+        url.pathname = '/admin'
+      } else {
+        url.pathname = '/dashboard'
+      }
+      return NextResponse.redirect(url)
+    }
+
+    // Proteção rigorosa do painel Super Admin (/admin)
+    if (url.pathname.startsWith('/admin')) {
+      if (profile?.role !== 'super_admin') {
+        url.pathname = '/dashboard'
+        return NextResponse.redirect(url)
+      }
+    }
   }
 
   return supabaseResponse
